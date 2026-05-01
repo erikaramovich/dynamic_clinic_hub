@@ -28,7 +28,7 @@ public class JwtProvider {
     public String generateAccessToken(String name, Role role) {
         return Jwts.builder()
                 .subject(name)
-                .claim("role", role.toString()) // Important: Embed the role into the JWT payload!
+                .claim("role", "ROLE_" + role.toString()) // Important: Embed the role into the JWT payload!
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
                 .signWith(getSigningKey())
