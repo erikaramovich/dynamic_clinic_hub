@@ -1,3 +1,5 @@
 spring:
   application:
     name: authentication-ms
+  profiles:
+    active: dev # Default to dev profile when running locally

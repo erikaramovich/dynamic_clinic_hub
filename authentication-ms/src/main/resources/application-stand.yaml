@@ -1,0 +1,20 @@
+spring:
+  config:
+    activate:
+      on-profile: stand
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: 3600000
