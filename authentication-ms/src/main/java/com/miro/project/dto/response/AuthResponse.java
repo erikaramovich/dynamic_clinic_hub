@@ -20,7 +20,4 @@ public class AuthResponse {
     @Builder.Default
     private String tokenType = "Bearer";
 
-    public String getUserFullInfo(){
-        return name + " " + role.toString();
-    }
 }
