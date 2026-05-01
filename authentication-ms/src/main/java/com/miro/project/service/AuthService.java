@@ -3,6 +3,7 @@ package com.miro.project.service;
 import com.miro.project.dto.request.LoginRequest;
 import com.miro.project.dto.request.RegisterRequest;
 import com.miro.project.dto.response.AuthResponse;
+import com.miro.project.exception.TokenRefreshException;
 import com.miro.project.model.RefreshToken;
 import com.miro.project.model.User;
 import com.miro.project.repository.RefreshTokenRepository;
@@ -89,5 +90,40 @@ public class AuthService {
                 .name(user.getName())
                 .role(user.getRole())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public AuthResponse refreshToken(String requestRefreshToken) {
+        // 1. Find the refresh token in the database
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(requestRefreshToken)
+                .orElseThrow(() -> new TokenRefreshException("Refresh token is not in database!"));
+
+        // 2. Check if the refresh token has expired (e.g., older than 7 days)
+        if (refreshToken.getExpiryDate().compareTo(Instant.now()) < 0) {
+            // If expired, delete it from the DB and force the user to login with a password again
+            refreshTokenRepository.delete(refreshToken);
+            throw new TokenRefreshException("Refresh token was expired. Please make a new sign in request.");
+        }
+
+        // 3. Token is valid! Get the user associated with this token
+        User user = refreshToken.getUser();
+
+        // 4. Generate a brand new short-lived Access Token
+        String newAccessToken = jwtProvider.generateAccessToken(user.getName(), user.getRole());
+
+        // 5. Return the new Access Token (we keep the same refresh token)
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(refreshToken.getToken())
+                .name(user.getName())
+                .role(user.getRole())
+                .build();
+    }
+
+    @Transactional
+    public void logout(String requestRefreshToken) {
+        // Find and delete the refresh token from the database.
+        // This permanently revokes the user's ability to get new access tokens.
+        refreshTokenRepository.deleteByToken(requestRefreshToken);
     }
 }
