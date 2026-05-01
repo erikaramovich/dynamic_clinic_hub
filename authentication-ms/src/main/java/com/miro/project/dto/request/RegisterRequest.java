@@ -24,4 +24,8 @@ public class RegisterRequest {
 
     @NotNull(message = "Role is required (PATIENT, DOCTOR, ADMINISTRATOR)")
     private Role role;
+
+    public String getUserFullInfo(){
+        return name + " " + email + " " + password + " " + role;
+    }
 }

@@ -19,4 +19,8 @@ public class AuthResponse {
     private Role role;
     @Builder.Default
     private String tokenType = "Bearer";
+
+    public String getUserFullInfo(){
+        return name + " " + role.toString();
+    }
 }
