@@ -22,18 +22,18 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        log.info("Register request: {}", request.getUserFullInfo());
+        log.info("[REGISTER] request: {}", request.toString());
         AuthResponse response = authService.register(request);
-        log.info("Register response: {}", response.getUserFullInfo());
-        return ResponseEntity.ok(response);
+        log.info("[REGISTER] response: {}", response.toString());
+        return createCookieResponse(response);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.info("Login request: {}", request.getUserFullInfo());
+        log.info("[LOGIN] request: {}", request.toString());
         AuthResponse response = authService.login(request);
-        log.info("Login response: {}", response.getUserFullInfo());
-        return ResponseEntity.ok(response);
+        log.info("[LOGIN] response: {}", response.toString());
+        return createCookieResponse(response);
     }
 
 
