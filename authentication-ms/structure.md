@@ -1,26 +1,44 @@
 ```text
 com.miro.project
+├── config
+│   ├── Flyway.java  
+│   ├── SecurityConfig.java
+│   └── SwaggerConfig.java  
+│   
+└── controller
+│   └── AuthController.java
+│   
+├── dto
+│   ├── request
+│   │   ├── LoginRequest.java
+│   │   └── RegisterRequest.java
+│   │
+│   └── response
+│       ├── AuthResponse.java  
+│       └── ErrorResponse.java   
+│   
+├── exception
+│   ├── GlobalExceptionHandler.java  
+│   ├── InvalidCredentialsException.java
+│   ├── TokenRefreshException.java
+│   └── UserAlreadyExistsException.java 
+│ 
 ├── model
 │   ├── Role.java              
 │   ├── User.java               
 │   └── RefreshToken.java
-├── dto
-│   ├── request
-│   │   ├── RegisterRequest.java
-│   │   └── LoginRequest.java
-│   └── response
-│       └── AuthResponse.java    
+│ 
 ├── repository
-│   ├── UserRepository.java
-│   └── RefreshTokenRepository.java
+│   ├── RefreshTokenRepository.java
+│   └── UserRepository.java
+│ 
 ├── security
 │   ├── JwtProvider.java         
 │   ├── UserDetailsImpl.java     
 │   └── UserDetailsServiceImpl.java 
-├── config
-│   └── SecurityConfig.java      
+│ 
 ├── service
-│   └── AuthService.java         
-└── controller
-└── AuthController.java
+│   └── AuthService.java 
+│        
+└──AuthenticationMsApplication.java
 ```
