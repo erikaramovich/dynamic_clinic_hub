@@ -8,7 +8,7 @@ RUN mvn dependency:go-offline -B
 
 # Copy the source code and build the application, skipping tests for speed
 COPY src ./src
-RUN mvn clean package -DskipTests
+RUN mvn clean package -DskipTests -Pstand
 
 # Stage 2: Run the application
 FROM eclipse-temurin:17-jre-jammy
