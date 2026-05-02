@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JwtProvider {
@@ -25,9 +26,10 @@ public class JwtProvider {
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateAccessToken(String name, Role role) {
+    public String generateAccessToken(String name, Role role, UUID userId) {
         return Jwts.builder()
-                .subject(name)
+                .subject(userId.toString())
+                .claim("name", name)
                 .claim("role", "ROLE_" + role.toString()) // Important: Embed the role into the JWT payload!
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs))

@@ -3,7 +3,9 @@ package com.miro.project.service;
 import com.miro.project.dto.request.LoginRequest;
 import com.miro.project.dto.request.RegisterRequest;
 import com.miro.project.dto.response.AuthResponse;
+import com.miro.project.exception.InvalidCredentialsException;
 import com.miro.project.exception.TokenRefreshException;
+import com.miro.project.exception.UserAlreadyExistsException;
 import com.miro.project.model.RefreshToken;
 import com.miro.project.model.User;
 import com.miro.project.repository.RefreshTokenRepository;
@@ -30,18 +32,19 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         // 1. Check if name or email already exists
-        if (userRepository.existsByName(request.getName())) {
-            throw new RuntimeException("Name is already taken!");
+        // Now we check if the user exists WITH THAT SPECIFIC ROLE
+        if (userRepository.existsByNameAndRole(request.getName(), request.getRole())) {
+            throw new UserAlreadyExistsException(request.getName() + " name is already registered for the " + request.getRole() + " role.");
         }
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email is already in use!");
+        if (userRepository.existsByEmailAndRole(request.getEmail(), request.getRole())) {
+            throw new UserAlreadyExistsException(request.getEmail() + " email is already registered for the " + request.getRole() + " role.");
         }
 
         // 2. Build and save the new user
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
-                // Never store plain text passwords! Hash it via BCrypt.
+                // Never store plain text passwords! Hash it via Bcrypt.
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
                 .build();
@@ -55,12 +58,18 @@ public class AuthService {
     @Transactional
     public AuthResponse login(LoginRequest request) {
         // 1. Find user by name
-        User user = userRepository.findByName(request.getName())
-                .orElseThrow(() -> new RuntimeException("Invalid name or password"));
+        // Find the exact account matching both NAME and ROLE
+        String errorMessage = "Invalid name, role, or password.-> " +
+                "name: " + request.getName() + ", " +
+                "role: " + request.getRole() + ", " +
+                "password: " + request.getPassword() + " !.";
+
+        User user = userRepository.findByNameAndRole(request.getName(), request.getRole())
+                .orElseThrow(() -> new InvalidCredentialsException(errorMessage));
 
         // 2. Validate password
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new RuntimeException("Invalid name or password");
+            throw new InvalidCredentialsException(errorMessage);
         }
 
         // 3. Generate tokens
@@ -70,7 +79,7 @@ public class AuthService {
     // Helper method to generate Access and Refresh tokens
     private AuthResponse createAuthSession(User user) {
         // Generate JWT
-        String accessToken = jwtProvider.generateAccessToken(user.getName(), user.getRole());
+        String accessToken = jwtProvider.generateAccessToken(user.getName(), user.getRole(), user.getId());
 
         // Create Refresh Token (expires in 7 days)
         RefreshToken refreshToken = RefreshToken.builder()
@@ -109,7 +118,7 @@ public class AuthService {
         User user = refreshToken.getUser();
 
         // 4. Generate a brand new short-lived Access Token
-        String newAccessToken = jwtProvider.generateAccessToken(user.getName(), user.getRole());
+        String newAccessToken = jwtProvider.generateAccessToken(user.getName(), user.getRole(), user.getId());
 
         // 5. Return the new Access Token (we keep the same refresh token)
         return AuthResponse.builder()

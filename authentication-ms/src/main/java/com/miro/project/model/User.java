@@ -5,7 +5,10 @@ import lombok.*;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"name", "role"}),
+        @UniqueConstraint(columnNames = {"email", "role"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,10 +20,10 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String email;
 
     @Column(name = "password_hash", nullable = false)
