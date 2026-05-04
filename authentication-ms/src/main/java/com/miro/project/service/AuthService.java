@@ -11,6 +11,8 @@ import com.miro.project.model.User;
 import com.miro.project.repository.RefreshTokenRepository;
 import com.miro.project.repository.UserRepository;
 import com.miro.project.security.JwtProvider;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
+    private final MeterRegistry meterRegistry;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -51,6 +54,13 @@ public class AuthService {
 
         user = userRepository.save(user);
 
+        // METRIC: Track total users created, tagged by their specific role
+        Counter.builder("auth_users_created_total")
+                .description("Total number of users registered")
+                .tag("role", user.getRole().name())
+                .register(meterRegistry)
+                .increment();
+
         // 3. Generate tokens for the newly registered user
         return createAuthSession(user);
     }
@@ -59,21 +69,39 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         // 1. Find user by name
         // Find the exact account matching both NAME and ROLE
-        String errorMessage = "Invalid name, role, or password.-> " +
-                "name: " + request.getName() + ", " +
-                "role: " + request.getRole() + ", " +
-                "password: " + request.getPassword() + " !.";
+        try {
+            String errorMessage = "Invalid name, role, or password.-> " +
+                    "name: " + request.getName() + ", " +
+                    "role: " + request.getRole() + ", " +
+                    "password: " + request.getPassword() + " !.";
 
-        User user = userRepository.findByNameAndRole(request.getName(), request.getRole())
-                .orElseThrow(() -> new InvalidCredentialsException(errorMessage));
+            User user = userRepository.findByNameAndRole(request.getName(), request.getRole())
+                    .orElseThrow(() -> new InvalidCredentialsException(errorMessage));
 
-        // 2. Validate password
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new InvalidCredentialsException(errorMessage);
+            // 2. Validate password
+            if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                throw new InvalidCredentialsException(errorMessage);
+            }
+
+            // METRIC: Successful login
+            recordLoginAttempt(request.getRole().name(), "success");
+
+            // 3. Generate tokens
+            return createAuthSession(user);
+        } catch (Exception e) {
+            // METRIC: Failed login attempt
+            recordLoginAttempt(request.getRole().name(), "failure");
+            throw e;
         }
+    }
 
-        // 3. Generate tokens
-        return createAuthSession(user);
+    private void recordLoginAttempt(String role, String status) {
+        Counter.builder("auth_login_attempts_total")
+                .description("Total number of login attempts")
+                .tag("role", role)
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
     }
 
     // Helper method to generate Access and Refresh tokens
