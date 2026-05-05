@@ -1,0 +1,34 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/miro_auth_db
+    username: erik.g
+    password: postgres
+
+  flyway:
+    enabled: true
+#    baseline-on-migrate: false
+#    locations: classpath:db/migration
+#    fail-on-missing-locations: true # This forces an error if the folder is missing!
+#
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET}
+    expiration-ms: 3600000 # 1 hour
+
+logging:
+  level:
+#    org.flywaydb: DEBUG # See flyway working logs
+    org.hibernate.orm.jdbc.bind: trace

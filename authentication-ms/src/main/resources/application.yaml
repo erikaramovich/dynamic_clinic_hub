@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: authentication-ms
+  profiles:
+    active: dev # Default to dev profile when running locally
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name} # Tags all metrics with the app name
