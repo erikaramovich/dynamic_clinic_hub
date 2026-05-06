@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/miro_appointment_db
+    url: jdbc:postgresql://localhost:5432/miro_appointment_db
     username: erik.g
     password: postgres
   jpa:
