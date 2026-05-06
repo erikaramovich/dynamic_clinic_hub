@@ -7,6 +7,8 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER}}
 
 app:
   jwt:
