@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/miro_appointment_db
+    username: erik.g
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET} # Shared with auth-ms
