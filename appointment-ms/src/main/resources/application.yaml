@@ -1,3 +1,25 @@
 spring:
   application:
     name: appointment-ms
+  profiles:
+    active: dev  # Default to dev profile when running locally
+
+kafka:
+  producer:
+    acks: all
+    enable-idempotence: true
+    transaction-id-prefix: appointment-tx- # Mandatory for EXACTLY_ONCE
+  consumer:
+    isolation-level: read_committed # Only process committed messages
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name} # Tags all metrics with the app name
