@@ -48,7 +48,7 @@ public class AppointmentService {
 
         app.setStatus(AppointmentStatus.CANCELLED);
         repository.save(app);
-        kafkaTemplate.send("appointment-events", appointmentId.toString(), "Event: APPOINTMENT_CANCELLED");
+        publishEvent(app); // FIXED: Structured Event
     }
 
     @Transactional // Ensures DB save and Kafka send succeed or fail together (EXACTLY_ONCE)
@@ -73,10 +73,7 @@ public class AppointmentService {
                 .build();
 
         appointment = repository.save(appointment);
-
-        // 2. Kafka Event: Past Tense status-specific events
-        kafkaTemplate.send("appointment-events", appointment.getId().toString(),
-                "Event: Appointment " + status.name() + " for ID " + appointment.getId());
+        publishEvent(appointment); // FIXED: Structured Event
 
         return appointment;
     }
@@ -88,8 +85,7 @@ public class AppointmentService {
         app.setDoctorId(doctorId);
         app.setStatus(AppointmentStatus.ASSIGNED);
         repository.save(app);
-
-        kafkaTemplate.send("appointment-events", appointmentId.toString(), "Event: DOCTOR_ASSIGNED");
+        publishEvent(app);
     }
 
     @Transactional
@@ -100,7 +96,19 @@ public class AppointmentService {
         kafkaTemplate.send("appointment-events", id.toString(), "Event: STATUS_CHANGED_TO_" + newStatus.name());
     }
 
-    // Read-only logic with pagination
+    private void publishEvent(Appointment app) {
+        AppointmentEvent event = AppointmentEvent.builder()
+                .appointmentId(app.getId())
+                .patientId(app.getPatientId())
+                .doctorId(app.getDoctorId())
+                .appointmentTime(app.getAppointmentTime())
+                .status(app.getStatus())
+                .eventTimestamp(Instant.now())
+                .build();
+
+        kafkaTemplate.send("appointment-events", app.getId().toString(), event);
+    }
+
     public Page<Appointment> getPatientAppointments(UUID id, Pageable pageable) {
         return repository.findAllByPatientId(id, pageable);
     }
