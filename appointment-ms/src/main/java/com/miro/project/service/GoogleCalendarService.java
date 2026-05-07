@@ -25,14 +25,22 @@ public class GoogleCalendarService {
 
             return calculateGaps(dayStart, dayEnd, busyPeriods);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch Google Calendar availability", e);
+            throw new RuntimeException("Google Calendar API failure: " + e.getMessage());
         }
+    }
+
+
+    public boolean isSlotAvailable(String doctorEmail, Instant requestedTime) {
+        List<Instant> availableSlots = getAvailableSlots(doctorEmail,
+                requestedTime.minus(1, ChronoUnit.MINUTES),
+                requestedTime.plus(31, ChronoUnit.MINUTES));
+        return !availableSlots.isEmpty();
     }
 
     private List<Instant> calculateGaps(Instant start, Instant end, List<TimePeriod> busy) {
         List<Instant> slots = new ArrayList<>();
         Instant current = start;
-        // Algorithm: Slide a 30-minute window and check against busy periods
+        // Slide a 30-minute window and check against busy periods
         while (current.plus(30, ChronoUnit.MINUTES).isBefore(end)) {
             Instant finalCurrent = current;
             boolean isBusy = busy.stream().anyMatch(p ->
