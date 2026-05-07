@@ -12,7 +12,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -35,8 +34,7 @@ public class AppointmentController {
     @GetMapping("/my")
     @PreAuthorize("hasRole('PATIENT')")
     public Page<Appointment> getMy(Pageable pageable) {
-        UUID userId = (UUID) org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return service.getPatientAppointments(userId, pageable);
+        return service.getPatientAppointments(getAuthenticatedUserId(), pageable);
     }
 
     @PatchMapping("/{id}/assign")
@@ -54,8 +52,7 @@ public class AppointmentController {
     @GetMapping("/doctor")
     @PreAuthorize("hasRole('DOCTOR')")
     public Page<Appointment> getAll(Pageable pageable) {
-        UUID doctorId = (UUID) org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return service.getDoctorAppointments(doctorId, pageable);
+        return service.getDoctorAppointments(getAuthenticatedUserId(), pageable);
     }
 
 
