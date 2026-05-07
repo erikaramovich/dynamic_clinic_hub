@@ -1,15 +1,19 @@
 package com.miro.project.service;
 
 import com.miro.project.dto.request.AppointmentRequest;
+import com.miro.project.dto.response.UserInternalResponse;
 import com.miro.project.model.Appointment;
+import com.miro.project.model.AppointmentEvent;
 import com.miro.project.model.AppointmentStatus;
 import com.miro.project.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,79 +25,92 @@ public class AppointmentService {
     private final AppointmentRepository repository;
     private final GoogleCalendarService calendarService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RestClient authWebClient; // Injected from RestClientConfig
 
-    // Logic for suggesting slots based on doctor UUID
-    public List<Instant> getAvailableSlotsForDoctor(UUID doctorId, Instant start, Instant end) {
-        String doctorEmail = resolveEmailFromId(doctorId); // Bridge between internal UUID and External Email
-        return calendarService.getAvailableSlots(doctorEmail, start, end);
+    // API 1: Fetch list of doctors from auth-ms for the UI
+    public List<UserInternalResponse> getAvailableDoctors() {
+        return authWebClient.get()
+                .uri("/api/internal/users/doctors")
+                .retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<List<UserInternalResponse>>() {
+                });
     }
 
     @Transactional
-    public void cancelAppointment(UUID appointmentId, UUID requesterId, String role) {
-        Appointment app = repository.findById(appointmentId)
-                .orElseThrow(() -> new RuntimeException("Appointment not found"));
-
-        // FIXED: IDOR Protection
-        // Patients can only cancel their OWN appointments
-        if (role.equals("ROLE_PATIENT") && !app.getPatientId().equals(requesterId)) {
-            throw new RuntimeException("Access Denied: You cannot cancel another user's appointment");
-        }
-
-        // Doctors can only cancel appointments assigned to THEM
-        if (role.equals("ROLE_DOCTOR") && !requesterId.equals(app.getDoctorId())) {
-            throw new RuntimeException("Access Denied: You cannot cancel an appointment not assigned to you");
-        }
-
-        // Admins can cancel anything (no check needed here)
-
-        app.setStatus(AppointmentStatus.CANCELLED);
-        repository.save(app);
-        publishEvent(app); // FIXED: Structured Event
-    }
-
-    @Transactional // Ensures DB save and Kafka send succeed or fail together (EXACTLY_ONCE)
     public Appointment createAppointment(AppointmentRequest request, UUID patientId) {
-        // 1. Availability Check: Only if a doctor was specified
-        if (request.getDoctorId() != null) {
-            String email = resolveEmailFromId(request.getDoctorId());
-            if (!calendarService.isSlotAvailable(email, request.getTime())) {
-                throw new RuntimeException("The selected time slot is already occupied.");
-            }
-        }
+        UUID doctorId = null;
+        AppointmentStatus status = AppointmentStatus.REQUESTED;
 
-        AppointmentStatus status = (request.getDoctorId() == null)
-                ? AppointmentStatus.REQUESTED
-                : AppointmentStatus.BOOKED;
+        // If a name was provided, resolve it to UUID and Email via auth-ms
+        if (request.getDoctorName() != null && !request.getDoctorName().isBlank()) {
+            UserInternalResponse doctor = resolveDoctorByName(request.getDoctorName());
+
+            // Validate availability in Google Calendar using resolved email
+            if (!calendarService.isSlotAvailable(doctor.getEmail(), request.getTime())) {
+                throw new RuntimeException("Doctor " + request.getDoctorName() + " is busy at this time.");
+            }
+
+            doctorId = doctor.getId();
+            status = AppointmentStatus.BOOKED;
+        }
 
         Appointment appointment = Appointment.builder()
                 .patientId(patientId)
-                .doctorId(request.getDoctorId())
+                .doctorId(doctorId)
                 .appointmentTime(request.getTime())
                 .status(status)
                 .build();
 
         appointment = repository.save(appointment);
-        publishEvent(appointment); // FIXED: Structured Event
-
+        publishEvent(appointment); // EXACTLY_ONCE triggered here
         return appointment;
     }
 
     @Transactional
-    public void assignDoctor(UUID appointmentId, UUID doctorId) {
+    public void assignDoctor(UUID appointmentId, String doctorName) {
         Appointment app = repository.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Appointment not found"));
-        app.setDoctorId(doctorId);
+
+        UserInternalResponse doctor = resolveDoctorByName(doctorName);
+
+        app.setDoctorId(doctor.getId());
         app.setStatus(AppointmentStatus.ASSIGNED);
         repository.save(app);
         publishEvent(app);
     }
 
     @Transactional
-    public void updateStatus(UUID id, AppointmentStatus newStatus) {
+    public void cancelAppointment(UUID id, UUID requesterId, String role) {
         Appointment app = repository.findById(id).orElseThrow();
-        app.setStatus(newStatus);
+        // IDOR Check
+        if (role.equals("ROLE_PATIENT") && !app.getPatientId().equals(requesterId)) {
+            throw new RuntimeException("Forbidden: Not your appointment");
+        }
+        app.setStatus(AppointmentStatus.CANCELLED);
         repository.save(app);
-        kafkaTemplate.send("appointment-events", id.toString(), "Event: STATUS_CHANGED_TO_" + newStatus.name());
+        publishEvent(app);
+    }
+
+    @Transactional
+    public void updateStatus(UUID id, AppointmentStatus status) {
+        Appointment app = repository.findById(id).orElseThrow();
+        app.setStatus(status);
+        repository.save(app);
+        publishEvent(app);
+    }
+
+    // INTERNAL HELPER: Uses RestClient to resolve Name -> ID/Email
+    private UserInternalResponse resolveDoctorByName(String name) {
+        return authWebClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/internal/users/search")
+                        .queryParam("name", name)
+                        .build())
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                    throw new RuntimeException("Doctor with name '" + name + "' not found in clinic records.");
+                })
+                .body(UserInternalResponse.class);
     }
 
     private void publishEvent(Appointment app) {
@@ -121,11 +138,4 @@ public class AppointmentService {
         return repository.findAll(pageable);
     }
 
-    /**
-     * MOCK RESOLVER: In a real system, this would call the auth-ms via RestClient
-     * or look up a local cache to find the email associated with the UUID.
-     */
-    private String resolveEmailFromId(UUID doctorId) {
-        return "dr.john@miro-clinic.com";
-    }
 }
