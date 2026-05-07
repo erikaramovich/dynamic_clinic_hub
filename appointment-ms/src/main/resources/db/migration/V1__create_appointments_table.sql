@@ -8,7 +8,7 @@ CREATE TABLE appointments
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     -- Constraint to ensure status is valid
-    CONSTRAINT chk_status CHECK (status IN ('requested', 'booked', 'assigned', 'cancelled', 'completed'))
+    CONSTRAINT chk_status CHECK (status IN ('REQUESTED', 'BOOKED', 'ASSIGNED', 'CANCELLED', 'COMPLETED'))
 );
 
 CREATE INDEX idx_appointments_patient ON appointments (patient_id);
