@@ -2,6 +2,7 @@ package com.miro.project.controller;
 
 import com.miro.project.dto.request.AppointmentRequest;
 import com.miro.project.dto.response.AppointmentResponse;
+import com.miro.project.dto.response.UserInternalResponse;
 import com.miro.project.model.Appointment;
 import com.miro.project.model.AppointmentStatus;
 import com.miro.project.service.AppointmentService;
@@ -29,6 +30,13 @@ public class AppointmentController {
         return (UUID) Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
     }
 
+    // Support for Available Doctors List
+    @GetMapping("/doctors")
+    @PreAuthorize("hasAnyRole('PATIENT', 'ADMINISTRATOR')")
+    public List<UserInternalResponse> listDoctors() {
+        return service.getAvailableDoctors();
+    }
+
     // NEW: Use Google Calendar Service to fetch slots for a doctor
     @GetMapping("/slots")
     @PreAuthorize("hasRole('PATIENT')")
@@ -54,8 +62,8 @@ public class AppointmentController {
 
     @PatchMapping("/{id}/assign")
     @PreAuthorize("hasRole('ADMINISTRATOR')")
-    public ResponseEntity<Void> assign(@PathVariable UUID id, @RequestParam UUID doctorId) {
-        service.assignDoctor(id, doctorId);
+    public ResponseEntity<Void> assign(@PathVariable UUID id, @RequestParam String doctorName) {
+        service.assignDoctor(id, doctorName);
         return ResponseEntity.noContent().build();
     }
 
@@ -76,11 +84,8 @@ public class AppointmentController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('PATIENT', 'ADMINISTRATOR', 'DOCTOR')")
     public ResponseEntity<Void> cancel(@PathVariable UUID id) {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        UUID principalId = (UUID) auth.getPrincipal();
-        String role = auth.getAuthorities().iterator().next().getAuthority();
-
-        service.cancelAppointment(id, principalId, role);
+        String role = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getAuthorities().iterator().next().getAuthority();
+        service.cancelAppointment(id, getAuthenticatedUserId(), role);
         return ResponseEntity.noContent().build();
     }
 
