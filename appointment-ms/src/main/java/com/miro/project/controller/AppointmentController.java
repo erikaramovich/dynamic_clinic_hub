@@ -5,6 +5,7 @@ import com.miro.project.dto.response.AppointmentResponse;
 import com.miro.project.model.Appointment;
 import com.miro.project.model.AppointmentStatus;
 import com.miro.project.service.AppointmentService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,7 +41,7 @@ public class AppointmentController {
 
     @PostMapping
     @PreAuthorize("hasRole('PATIENT')")
-    public ResponseEntity<AppointmentResponse> create(@RequestBody AppointmentRequest request) {
+    public ResponseEntity<AppointmentResponse> create(@Valid @RequestBody AppointmentRequest request) {
         Appointment app = service.createAppointment(request, getAuthenticatedUserId());
         return ResponseEntity.ok(convertToResponse(app));
     }
@@ -74,8 +75,13 @@ public class AppointmentController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('PATIENT', 'ADMINISTRATOR', 'DOCTOR')")
-    public void cancel(@PathVariable UUID id) {
-        service.updateStatus(id, AppointmentStatus.CANCELLED);
+    public ResponseEntity<Void> cancel(@PathVariable UUID id) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID principalId = (UUID) auth.getPrincipal();
+        String role = auth.getAuthorities().iterator().next().getAuthority();
+
+        service.cancelAppointment(id, principalId, role);
+        return ResponseEntity.noContent().build();
     }
 
     private AppointmentResponse convertToResponse(Appointment app) {
