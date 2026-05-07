@@ -6,7 +6,7 @@ spring:
 
 app:
   services:
-    auth-url: ${AUTH_MS_URL}
+    auth-url: ${AUTH_MS_URL:http://localhost:8080}
 
 kafka:
   producer:
