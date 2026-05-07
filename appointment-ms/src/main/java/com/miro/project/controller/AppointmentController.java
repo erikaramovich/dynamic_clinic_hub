@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -24,7 +25,7 @@ public class AppointmentController {
     private final AppointmentService service;
 
     private UUID getAuthenticatedUserId() {
-        return (UUID) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return (UUID) Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
     }
 
     // NEW: Use Google Calendar Service to fetch slots for a doctor
