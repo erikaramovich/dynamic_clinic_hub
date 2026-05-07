@@ -4,6 +4,10 @@ spring:
   profiles:
     active: dev  # Default to dev profile when running locally
 
+app:
+  services:
+    auth-url: ${AUTH_MS_URL}
+
 kafka:
   producer:
     acks: all
