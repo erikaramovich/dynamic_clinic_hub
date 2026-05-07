@@ -32,11 +32,11 @@ public class AppointmentController {
     // NEW: Use Google Calendar Service to fetch slots for a doctor
     @GetMapping("/slots")
     @PreAuthorize("hasRole('PATIENT')")
-    public ResponseEntity<List<Instant>> getSlots(@RequestParam UUID doctorId,
+    public ResponseEntity<List<Instant>> getSlots(@RequestParam String doctorName,
                                                   @RequestParam Instant start,
                                                   @RequestParam Instant end) {
         // Controller remains clean and works with the internal system IDs
-        return ResponseEntity.ok(service.getAvailableSlotsForDoctor(doctorId, start, end));
+        return ResponseEntity.ok(service.getAvailableSlots(doctorName, start, end));
     }
 
     @PostMapping

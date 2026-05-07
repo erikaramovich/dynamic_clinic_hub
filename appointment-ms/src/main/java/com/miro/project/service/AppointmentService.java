@@ -32,8 +32,13 @@ public class AppointmentService {
         return authWebClient.get()
                 .uri("/api/internal/users/doctors")
                 .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<List<UserInternalResponse>>() {
+                .body(new org.springframework.core.ParameterizedTypeReference<>() {
                 });
+    }
+
+    public List<Instant> getAvailableSlots(String doctorName, Instant dayStart, Instant dayEnd) {
+        UserInternalResponse doctor = resolveDoctorByName(doctorName);
+        return calendarService.getAvailableSlots(doctor.getEmail(), dayStart, dayEnd);
     }
 
     @Transactional
@@ -81,7 +86,8 @@ public class AppointmentService {
 
     @Transactional
     public void cancelAppointment(UUID id, UUID requesterId, String role) {
-        Appointment app = repository.findById(id).orElseThrow();
+        Appointment app = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
         // IDOR Check
         if (role.equals("ROLE_PATIENT") && !app.getPatientId().equals(requesterId)) {
             throw new RuntimeException("Forbidden: Not your appointment");
@@ -93,7 +99,8 @@ public class AppointmentService {
 
     @Transactional
     public void updateStatus(UUID id, AppointmentStatus status) {
-        Appointment app = repository.findById(id).orElseThrow();
+        Appointment app = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
         app.setStatus(status);
         repository.save(app);
         publishEvent(app);
