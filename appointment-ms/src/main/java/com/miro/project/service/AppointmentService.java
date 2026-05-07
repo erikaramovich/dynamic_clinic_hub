@@ -28,6 +28,29 @@ public class AppointmentService {
         return calendarService.getAvailableSlots(doctorEmail, start, end);
     }
 
+    @Transactional
+    public void cancelAppointment(UUID appointmentId, UUID requesterId, String role) {
+        Appointment app = repository.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+
+        // FIXED: IDOR Protection
+        // Patients can only cancel their OWN appointments
+        if (role.equals("ROLE_PATIENT") && !app.getPatientId().equals(requesterId)) {
+            throw new RuntimeException("Access Denied: You cannot cancel another user's appointment");
+        }
+
+        // Doctors can only cancel appointments assigned to THEM
+        if (role.equals("ROLE_DOCTOR") && !requesterId.equals(app.getDoctorId())) {
+            throw new RuntimeException("Access Denied: You cannot cancel an appointment not assigned to you");
+        }
+
+        // Admins can cancel anything (no check needed here)
+
+        app.setStatus(AppointmentStatus.CANCELLED);
+        repository.save(app);
+        kafkaTemplate.send("appointment-events", appointmentId.toString(), "Event: APPOINTMENT_CANCELLED");
+    }
+
     @Transactional // Ensures DB save and Kafka send succeed or fail together (EXACTLY_ONCE)
     public Appointment createAppointment(AppointmentRequest request, UUID patientId) {
         // 1. Availability Check: Only if a doctor was specified
