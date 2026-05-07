@@ -1,6 +1,7 @@
 package com.miro.project.controller;
 
 import com.miro.project.dto.request.AppointmentRequest;
+import com.miro.project.dto.response.AppointmentResponse;
 import com.miro.project.model.Appointment;
 import com.miro.project.model.AppointmentStatus;
 import com.miro.project.service.AppointmentService;
@@ -12,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -24,51 +27,63 @@ public class AppointmentController {
         return (UUID) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
 
-    @PostMapping
+    // NEW: Use Google Calendar Service to fetch slots for a doctor
+    @GetMapping("/slots")
     @PreAuthorize("hasRole('PATIENT')")
-    public ResponseEntity<Appointment> create(@RequestBody AppointmentRequest request) {
-        return ResponseEntity.ok(service.createAppointment(request, getAuthenticatedUserId()));
+    public ResponseEntity<List<Instant>> getSlots(@RequestParam UUID doctorId,
+                                                  @RequestParam Instant start,
+                                                  @RequestParam Instant end) {
+        // Controller remains clean and works with the internal system IDs
+        return ResponseEntity.ok(service.getAvailableSlotsForDoctor(doctorId, start, end));
     }
 
+    @PostMapping
+    @PreAuthorize("hasRole('PATIENT')")
+    public ResponseEntity<AppointmentResponse> create(@RequestBody AppointmentRequest request) {
+        Appointment app = service.createAppointment(request, getAuthenticatedUserId());
+        return ResponseEntity.ok(convertToResponse(app));
+    }
 
     @GetMapping("/my")
     @PreAuthorize("hasRole('PATIENT')")
-    public Page<Appointment> getMy(Pageable pageable) {
-        return service.getPatientAppointments(getAuthenticatedUserId(), pageable);
+    public Page<AppointmentResponse> getMy(Pageable pageable) {
+        return service.getPatientAppointments(getAuthenticatedUserId(), pageable).map(this::convertToResponse);
     }
 
     @PatchMapping("/{id}/assign")
     @PreAuthorize("hasRole('ADMINISTRATOR')")
-    public void assign(@PathVariable UUID id, @RequestParam UUID doctorId) {
+    public ResponseEntity<Void> assign(@PathVariable UUID id, @RequestParam UUID doctorId) {
         service.assignDoctor(id, doctorId);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/complete")
     @PreAuthorize("hasRole('DOCTOR')")
-    public void complete(@PathVariable UUID id) {
+    public ResponseEntity<Void> complete(@PathVariable UUID id) {
         service.updateStatus(id, AppointmentStatus.COMPLETED);
+        return ResponseEntity.noContent().build();
     }
-
-    @GetMapping("/doctor")
-    @PreAuthorize("hasRole('DOCTOR')")
-    public Page<Appointment> getAll(Pageable pageable) {
-        return service.getDoctorAppointments(getAuthenticatedUserId(), pageable);
-    }
-
 
     @GetMapping("/all")
     @PreAuthorize("hasRole('ADMINISTRATOR')")
-    public Page<Appointment> getAll(@RequestParam(required = false) AppointmentStatus status, Pageable pageable) {
-        if (status != null) {
-            return service.getAppointmentsByStatus(status, pageable);
-        }
-        return service.getAll(pageable);
+    public Page<AppointmentResponse> getAll(@RequestParam(required = false) AppointmentStatus status, Pageable pageable) {
+        Page<Appointment> result = (status != null) ? service.getAppointmentsByStatus(status, pageable) : service.getAll(pageable);
+        return result.map(this::convertToResponse);
     }
-
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('PATIENT', 'ADMINISTRATOR', 'DOCTOR')")
     public void cancel(@PathVariable UUID id) {
         service.updateStatus(id, AppointmentStatus.CANCELLED);
+    }
+
+    private AppointmentResponse convertToResponse(Appointment app) {
+        return AppointmentResponse.builder()
+                .id(app.getId())
+                .patientId(app.getPatientId())
+                .doctorId(app.getDoctorId())
+                .appointmentTime(app.getAppointmentTime())
+                .status(app.getStatus())
+                .build();
     }
 }
