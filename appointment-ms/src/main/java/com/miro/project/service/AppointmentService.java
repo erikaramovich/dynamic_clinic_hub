@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static com.miro.project.config.KafkaConfig.TOPIC_NAME;
+
 @Service
 @RequiredArgsConstructor
 public class AppointmentService {
@@ -130,7 +132,7 @@ public class AppointmentService {
                 .eventTimestamp(Instant.now())
                 .build();
 
-        kafkaTemplate.send("appointment-events", app.getId().toString(), event);
+        kafkaTemplate.send(TOPIC_NAME, app.getId().toString(), event);
     }
 
     public Page<Appointment> getPatientAppointments(UUID id, Pageable pageable) {
