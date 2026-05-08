@@ -24,6 +24,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable) // Disable CSRF as we use JWTs (stateless)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll() // Allow anyone to register/login
+                        .requestMatchers("/api/internal/**").permitAll() // Allow for internal connection
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll() // Allow swagger
                         // Add this line to allow access to metrics and health checks
                         .requestMatchers("/actuator/**").permitAll()
