@@ -6,6 +6,8 @@ import com.miro.project.model.Appointment;
 import com.miro.project.model.AppointmentEvent;
 import com.miro.project.model.AppointmentStatus;
 import com.miro.project.repository.AppointmentRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +27,7 @@ import static com.miro.project.config.KafkaConfig.TOPIC_NAME;
 @RequiredArgsConstructor
 public class AppointmentService {
     private final AppointmentRepository repository;
+    private final MeterRegistry meterRegistry;
     private final GoogleCalendarService calendarService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RestClient authWebClient; // Injected from RestClientConfig
@@ -69,6 +72,13 @@ public class AppointmentService {
                 .build();
 
         appointment = repository.save(appointment);
+
+        Counter.builder("appointment_created_total")
+                .description("Total number of appointments created")
+                .tag("status", appointment.getStatus().name())
+                .register(meterRegistry)
+                .increment();
+
         publishEvent(appointment); // EXACTLY_ONCE triggered here
         return appointment;
     }
