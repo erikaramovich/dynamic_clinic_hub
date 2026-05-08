@@ -1,0 +1,1 @@
+CREATE DATABASE miro_appointment_db;
