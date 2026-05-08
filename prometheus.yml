@@ -12,3 +12,11 @@ scrape_configs:
         labels:
           application: 'authentication-ms'
           environment: $SPRING_PROFILE
+
+  - job_name: 'appointment-ms'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: [ 'host.docker.internal:8081' ]
+        labels:
+          application: 'appointment-ms'
+          environment: $SPRING_PROFILE
