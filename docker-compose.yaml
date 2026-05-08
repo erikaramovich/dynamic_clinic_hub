@@ -4,42 +4,102 @@ services:
   # 1. The Database
   postgres:
     image: postgres:15-alpine
-    container_name: auth_postgres
+    container_name: clinic_postgres
     environment:
-      # These pull directly from the .env file
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB} # Creates miro_auth_db by default
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Maps a script to create the second database on startup
+      - ./init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # 2. Your Application
+  # 2. Zookeeper (Required for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: clinic_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  # 3. Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: clinic_kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # PLAINTEXT is for internal docker network, PLAINTEXT_HOST is for local machine access
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # 3.1 Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8088:8080"
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092 kafka:9092
+
+  # 4. Authentication Microservice
   authentication-ms:
     build:
-      context: ./authentication-ms # Tells Docker to build the Dockerfile in this folder
+      context: ./authentication-ms
     container_name: authentication-ms
     ports:
-      - "8080:8080"
+      - "8080:8080" # Exposed for local running
     environment:
+      - SERVER_PORT=8080
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}
-      # Construct the DB URL using the docker service name "postgres" instead of "localhost"
-      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_AUTH_DB}
       - DB_USERNAME=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      # Map your env variable to the one expected by application-stand.yaml
       - JWT_SECRET=${APP_JWT_SECRET}
     depends_on:
       postgres:
-        condition: service_healthy # Waits for Postgres to be fully ready before starting the app
+        condition: service_healthy
 
-  # 3. Prometheus
+  # 5. Appointment Microservice
+  appointment-ms:
+    build:
+      context: ./appointment-ms
+    container_name: appointment-ms
+    ports:
+      - "8081:8081" # Exposed for local running
+    environment:
+      - SERVER_PORT=8081
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_APPOINTMENT_DB} # Connects to the second DB
+      - DB_USERNAME=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - JWT_SECRET=${APP_JWT_SECRET}
+      - AUTH_MS_URL=http://authentication-ms:8080 # Internal Docker network URL
+      - KAFKA_SERVER=kafka:29092 # Internal Docker network Kafka URL
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  # 6. Prometheus
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -50,17 +110,16 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    # 4. Grafana
+  # 7. Grafana
   grafana:
     image: grafana/grafana-oss:latest
     container_name: grafana
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin # Default login is admin / admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
-
 
 volumes:
   postgres_data:
