@@ -20,8 +20,7 @@ public class InternalUserController {
     // Fetch all users with DOCTOR role
     @GetMapping("/doctors")
     public List<UserInternalResponse> getAllDoctors() {
-        return userRepository.findAll().stream()
-                .filter(u -> u.getRole() == Role.DOCTOR)
+        return userRepository.findAllByRole(Role.DOCTOR).stream()
                 .map(this::mapToInternal)
                 .collect(Collectors.toList());
     }
