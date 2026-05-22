@@ -129,7 +129,7 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse refreshToken(String requestRefreshToken) {
         // 1. Find the refresh token in the database
         RefreshToken refreshToken = refreshTokenRepository.findByToken(requestRefreshToken)
