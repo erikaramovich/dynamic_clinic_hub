@@ -2,10 +2,14 @@ package com.miro.project.controller;
 
 import com.miro.project.dto.response.UserInternalResponse;
 import com.miro.project.model.Role;
+import com.miro.project.model.User;
 import com.miro.project.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,7 +37,7 @@ public class InternalUserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    private UserInternalResponse mapToInternal(com.miro.project.model.User user) {
+    private UserInternalResponse mapToInternal(User user) {
         return UserInternalResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
