@@ -1,15 +1,15 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/miro_appointment_db
-    username: erik.g
-    password: postgres
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/miro_appointment_db}
+    username: ${DB_USERNAME:macbook}
+    password: ${DB_PASSWORD:postgres}
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: true
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_SERVER:localhost:9092}
 
 app:
   jwt:
-    secret: ${APP_JWT_SECRET} # Shared with auth-ms
+    secret: ${JWT_SECRET} # Shared with auth-ms

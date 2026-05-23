@@ -60,6 +60,12 @@ public class AppointmentController {
         return service.getPatientAppointments(getAuthenticatedUserId(), pageable).map(this::convertToResponse);
     }
 
+    @GetMapping("/doctor/my")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public Page<AppointmentResponse> getDoctorMy(Pageable pageable) {
+        return service.getDoctorAppointments(getAuthenticatedUserId(), pageable).map(this::convertToResponse);
+    }
+
     @PatchMapping("/{id}/assign")
     @PreAuthorize("hasRole('ADMINISTRATOR')")
     public ResponseEntity<Void> assign(@PathVariable UUID id, @RequestParam String doctorName) {

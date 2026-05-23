@@ -4,6 +4,9 @@ spring:
   profiles:
     active: dev  # Default to dev profile when running locally
 
+server:
+  port: 8081
+
 app:
   services:
     auth-url: ${AUTH_MS_URL:http://localhost:8080}

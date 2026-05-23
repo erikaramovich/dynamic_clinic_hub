@@ -149,6 +149,10 @@ public class AppointmentService {
         return repository.findAllByPatientId(id, pageable);
     }
 
+    public Page<Appointment> getDoctorAppointments(UUID id, Pageable pageable) {
+        return repository.findAllByDoctorId(id, pageable);
+    }
+
     public Page<Appointment> getAppointmentsByStatus(AppointmentStatus status, Pageable pageable) {
         return repository.findAllByStatus(status, pageable);
     }
