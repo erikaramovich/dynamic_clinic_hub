@@ -20,10 +20,15 @@ kafka:
     isolation-level: read_committed # Only process committed messages
 
 management:
+  auditevents:
+    enabled: false
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include:
+          - health
+          - info
+          - prometheus
   endpoint:
     prometheus:
       enabled: true
