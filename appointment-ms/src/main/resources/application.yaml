@@ -1,8 +1,17 @@
+kind: Application
+
 spring:
   application:
     name: appointment-ms
   profiles:
     active: dev  # Default to dev profile when running locally
+  cache:
+    type: caffeine
+    cache-names:
+      - doctors
+      - slots
+    caffeine:
+      spec: expireAfterWrite=10m,maximumSize=100
 
 server:
   port: 8081
@@ -10,6 +19,36 @@ server:
 app:
   services:
     auth-url: ${AUTH_MS_URL:http://localhost:8080}
+  business:
+    hours:
+      start-utc: 9
+      end-utc: 17
+    slot-duration-minutes: 30
+  google:
+    calendar:
+      credentials-path: ${GOOGLE_CREDENTIALS_PATH:classpath:/google-credentials.json}
+      application-name: ${spring.application.name}
+
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      authService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+      googleCalendar:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+
+
 
 kafka:
   producer:
