@@ -9,7 +9,8 @@ import java.time.Instant;
 
 @Data
 public class AppointmentRequest {
-    @Schema(description = "The Name of the doctor you want to see", example = "Hovo")
+    @NotNull(message = "Doctor Name is required")
+    @Schema(description = "The name of the doctor you want to see", example = "Dr. John Doe")
     private String doctorName;
 
     @NotNull(message = "Appointment time is required")
