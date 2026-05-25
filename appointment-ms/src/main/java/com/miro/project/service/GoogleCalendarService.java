@@ -5,7 +5,10 @@ import com.google.api.services.calendar.model.FreeBusyRequest;
 import com.google.api.services.calendar.model.FreeBusyRequestItem;
 import com.google.api.services.calendar.model.FreeBusyResponse;
 import com.google.api.services.calendar.model.TimePeriod;
+import com.miro.project.exception.GoogleApiException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -21,6 +24,16 @@ import java.util.List;
 public class GoogleCalendarService {
     private final Calendar calendarClient;
 
+    @Value("${app.business.hours.start-utc}")
+    private int businessStartHour;
+
+    @Value("${app.business.hours.end-utc}")
+    private int businessEndHour;
+
+    @Value("${app.business.slot-duration-minutes}")
+    private int slotDuration;
+
+    @CircuitBreaker(name = "googleCalendar")
     public List<Instant> getAvailableSlots(String doctorEmail, Instant dayStart, Instant dayEnd) {
         try {
             FreeBusyRequest request = new FreeBusyRequest()
@@ -33,7 +46,7 @@ public class GoogleCalendarService {
 
             return calculateGaps(dayStart, dayEnd, busyPeriods);
         } catch (Exception e) {
-            throw new RuntimeException("Google Calendar API failure: " + e.getMessage());
+            throw new GoogleApiException("Google Calendar API failure: " + e.getMessage());
         }
     }
 
@@ -41,13 +54,13 @@ public class GoogleCalendarService {
         // Business hours check for direct booking
         ZonedDateTime zdt = requestedTime.atZone(ZoneOffset.UTC);
         int hour = zdt.getHour();
-        if (hour < 9 || hour >= 17) {
+        if (hour < businessStartHour || hour >= businessEndHour) {
             return false;
         }
 
         List<Instant> availableSlots = getAvailableSlots(doctorEmail,
                 requestedTime.minus(1, ChronoUnit.MINUTES),
-                requestedTime.plus(31, ChronoUnit.MINUTES));
+                requestedTime.plus(slotDuration + 1, ChronoUnit.MINUTES));
         return !availableSlots.isEmpty();
     }
 
@@ -55,20 +68,19 @@ public class GoogleCalendarService {
         List<Instant> slots = new ArrayList<>();
         Instant current = start;
 
-        while (current.plus(30, ChronoUnit.MINUTES).isBefore(end)) {
-            // FIXED: Added Business Hours Logic (09:00 - 17:00 UTC)
+        while (current.plus(slotDuration, ChronoUnit.MINUTES).isBefore(end)) {
             ZonedDateTime zdt = current.atZone(ZoneOffset.UTC);
             int hour = zdt.getHour();
 
-            if (hour >= 9 && hour < 17) {
+            if (hour >= businessStartHour && hour < businessEndHour) {
                 Instant finalCurrent = current;
                 boolean isBusy = busy.stream().anyMatch(p ->
                         finalCurrent.isBefore(Instant.ofEpochMilli(p.getEnd().getValue())) &&
-                                finalCurrent.plus(30, ChronoUnit.MINUTES).isAfter(Instant.ofEpochMilli(p.getStart().getValue()))
+                                finalCurrent.plus(slotDuration, ChronoUnit.MINUTES).isAfter(Instant.ofEpochMilli(p.getStart().getValue()))
                 );
                 if (!isBusy) slots.add(current);
             }
-            current = current.plus(30, ChronoUnit.MINUTES);
+            current = current.plus(slotDuration, ChronoUnit.MINUTES);
         }
         return slots;
     }
