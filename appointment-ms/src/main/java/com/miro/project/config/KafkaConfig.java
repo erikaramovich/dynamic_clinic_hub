@@ -56,8 +56,8 @@ public class KafkaConfig {
     @Bean
     public NewTopic appointmentEventsTopic() {
         return TopicBuilder.name(TOPIC_NAME)
-                .partitions(3) // Fulfills requirement: justify partition choice
-                .replicas(1)
+                .partitions(3)
+                .replicas(3)
                 .build();
     }
 }
