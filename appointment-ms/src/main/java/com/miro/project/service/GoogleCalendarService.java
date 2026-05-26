@@ -7,8 +7,9 @@ import com.google.api.services.calendar.model.FreeBusyResponse;
 import com.google.api.services.calendar.model.TimePeriod;
 import com.miro.project.exception.GoogleApiException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -20,9 +21,14 @@ import java.util.Collections;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class GoogleCalendarService {
     private final Calendar calendarClient;
+    private final GoogleCalendarService self;
+
+    public GoogleCalendarService(Calendar calendarClient, @Lazy GoogleCalendarService self) {
+        this.calendarClient = calendarClient;
+        this.self = self;
+    }
 
     @Value("${app.business.hours.start-utc}")
     private int businessStartHour;
@@ -33,6 +39,7 @@ public class GoogleCalendarService {
     @Value("${app.business.slot-duration-minutes}")
     private int slotDuration;
 
+    @Cacheable(value = "slots")
     @CircuitBreaker(name = "googleCalendar")
     public List<Instant> getAvailableSlots(String doctorEmail, Instant dayStart, Instant dayEnd) {
         try {
@@ -58,7 +65,7 @@ public class GoogleCalendarService {
             return false;
         }
 
-        List<Instant> availableSlots = getAvailableSlots(doctorEmail,
+        List<Instant> availableSlots = self.getAvailableSlots(doctorEmail,
                 requestedTime.minus(1, ChronoUnit.MINUTES),
                 requestedTime.plus(slotDuration + 1, ChronoUnit.MINUTES));
         return !availableSlots.isEmpty();

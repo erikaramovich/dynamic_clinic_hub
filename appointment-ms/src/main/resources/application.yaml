@@ -11,7 +11,10 @@ spring:
       - doctors
       - slots
     caffeine:
-      spec: expireAfterWrite=10m,maximumSize=100
+      spec:
+        - expireAfterWrite=10m
+        - maximumSize=100
+        - recordStats
 
 server:
   port: 8081
