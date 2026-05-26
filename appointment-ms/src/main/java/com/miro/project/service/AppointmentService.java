@@ -2,6 +2,7 @@ package com.miro.project.service;
 
 import com.miro.project.dto.request.AppointmentRequest;
 import com.miro.project.dto.response.UserInternalResponse;
+import com.miro.project.exception.SlotUnavailableException;
 import com.miro.project.model.Appointment;
 import com.miro.project.model.AppointmentEvent;
 import com.miro.project.model.AppointmentStatus;
@@ -11,11 +12,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,36 +29,29 @@ public class AppointmentService {
     private final MeterRegistry meterRegistry;
     private final GoogleCalendarService calendarService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final RestClient authWebClient; // Injected from RestClientConfig
+    private final DoctorServiceClient doctorServiceClient;
 
-    // API 1: Fetch list of doctors from auth-ms for the UI
     public List<UserInternalResponse> getAvailableDoctors() {
-        return authWebClient.get()
-                .uri("/api/internal/users/doctors")
-                .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<>() {
-                });
+        return doctorServiceClient.getAvailableDoctors();
     }
 
     public List<Instant> getAvailableSlots(String doctorName, Instant dayStart, Instant dayEnd) {
-        UserInternalResponse doctor = resolveDoctorByName(doctorName);
+        UserInternalResponse doctor = doctorServiceClient.resolveDoctorByName(doctorName);
         return calendarService.getAvailableSlots(doctor.getEmail(), dayStart, dayEnd);
     }
 
     @Transactional
     public Appointment createAppointment(AppointmentRequest request, UUID patientId) {
-        UUID doctorId = null;
         AppointmentStatus status = AppointmentStatus.REQUESTED;
+        String doctorName = request.getDoctorName();
+        UUID doctorId = null;
 
-        // If a name was provided, resolve it to UUID and Email via auth-ms
-        if (request.getDoctorName() != null && !request.getDoctorName().isBlank()) {
-            UserInternalResponse doctor = resolveDoctorByName(request.getDoctorName());
+        if (doctorName != null && !doctorName.isBlank()) {
+            UserInternalResponse doctor = doctorServiceClient.resolveDoctorByName(doctorName);
 
-            // Validate availability in Google Calendar using resolved email
             if (!calendarService.isSlotAvailable(doctor.getEmail(), request.getTime())) {
-                throw new RuntimeException("Doctor " + request.getDoctorName() + " is busy at this time.");
+                throw new SlotUnavailableException("Doctor " + doctorName + " is busy at this time.");
             }
-
             doctorId = doctor.getId();
             status = AppointmentStatus.BOOKED;
         }
@@ -73,13 +65,8 @@ public class AppointmentService {
 
         appointment = repository.save(appointment);
 
-        Counter.builder("appointment_created_total")
-                .description("Total number of appointments created")
-                .tag("status", appointment.getStatus().name())
-                .register(meterRegistry)
-                .increment();
-
-        publishEvent(appointment); // EXACTLY_ONCE triggered here
+        incrementCreatedCounter(appointment.getStatus());
+        publishEvent(appointment);
         return appointment;
     }
 
@@ -88,7 +75,7 @@ public class AppointmentService {
         Appointment app = repository.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Appointment not found"));
 
-        UserInternalResponse doctor = resolveDoctorByName(doctorName);
+        UserInternalResponse doctor = doctorServiceClient.resolveDoctorByName(doctorName);
 
         app.setDoctorId(doctor.getId());
         app.setStatus(AppointmentStatus.ASSIGNED);
@@ -100,7 +87,7 @@ public class AppointmentService {
     public void cancelAppointment(UUID id, UUID requesterId, String role) {
         Appointment app = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Appointment not found"));
-        // IDOR Check
+
         if (role.equals("ROLE_PATIENT") && !app.getPatientId().equals(requesterId)) {
             throw new RuntimeException("Forbidden: Not your appointment");
         }
@@ -118,18 +105,12 @@ public class AppointmentService {
         publishEvent(app);
     }
 
-    // INTERNAL HELPER: Uses RestClient to resolve Name -> ID/Email
-    private UserInternalResponse resolveDoctorByName(String name) {
-        return authWebClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/internal/users/search")
-                        .queryParam("name", name)
-                        .build())
-                .retrieve()
-                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                    throw new RuntimeException("Doctor with name '" + name + "' not found in clinic records.");
-                })
-                .body(UserInternalResponse.class);
+    private void incrementCreatedCounter(AppointmentStatus status) {
+        Counter.builder("appointment_created_total")
+                .description("Total number of appointments created")
+                .tag("status", status.name())
+                .register(meterRegistry)
+                .increment();
     }
 
     private void publishEvent(Appointment app) {
