@@ -3,6 +3,7 @@ package com.miro.project.controller;
 import com.miro.project.dto.request.AppointmentRequest;
 import com.miro.project.dto.response.AppointmentResponse;
 import com.miro.project.dto.response.UserInternalResponse;
+import com.miro.project.mapper.AppointmentMapper;
 import com.miro.project.model.Appointment;
 import com.miro.project.model.AppointmentStatus;
 import com.miro.project.service.AppointmentService;
@@ -12,6 +13,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +28,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AppointmentController {
     private final AppointmentService service;
+    private final AppointmentMapper mapper;
 
     private UUID getAuthenticatedUserId() {
         return (UUID) Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
@@ -43,7 +47,6 @@ public class AppointmentController {
     public ResponseEntity<List<Instant>> getSlots(@RequestParam String doctorName,
                                                   @RequestParam Instant start,
                                                   @RequestParam Instant end) {
-        // Controller remains clean and works with the internal system IDs
         return ResponseEntity.ok(service.getAvailableSlots(doctorName, start, end));
     }
 
@@ -51,19 +54,19 @@ public class AppointmentController {
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<AppointmentResponse> create(@Valid @RequestBody AppointmentRequest request) {
         Appointment app = service.createAppointment(request, getAuthenticatedUserId());
-        return ResponseEntity.ok(convertToResponse(app));
+        return ResponseEntity.ok(mapper.toResponse(app));
     }
 
     @GetMapping("/my")
     @PreAuthorize("hasRole('PATIENT')")
     public Page<AppointmentResponse> getMy(Pageable pageable) {
-        return service.getPatientAppointments(getAuthenticatedUserId(), pageable).map(this::convertToResponse);
+        return service.getPatientAppointments(getAuthenticatedUserId(), pageable).map(mapper::toResponse);
     }
 
     @GetMapping("/doctor/my")
     @PreAuthorize("hasRole('DOCTOR')")
     public Page<AppointmentResponse> getDoctorMy(Pageable pageable) {
-        return service.getDoctorAppointments(getAuthenticatedUserId(), pageable).map(this::convertToResponse);
+        return service.getDoctorAppointments(getAuthenticatedUserId(), pageable).map(mapper::toResponse);
     }
 
     @PatchMapping("/{id}/assign")
@@ -84,24 +87,19 @@ public class AppointmentController {
     @PreAuthorize("hasRole('ADMINISTRATOR')")
     public Page<AppointmentResponse> getAll(@RequestParam(required = false) AppointmentStatus status, Pageable pageable) {
         Page<Appointment> result = (status != null) ? service.getAppointmentsByStatus(status, pageable) : service.getAll(pageable);
-        return result.map(this::convertToResponse);
+        return result.map(mapper::toResponse);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('PATIENT', 'ADMINISTRATOR', 'DOCTOR')")
-    public ResponseEntity<Void> cancel(@PathVariable UUID id) {
-        String role = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getAuthorities().iterator().next().getAuthority();
-        service.cancelAppointment(id, getAuthenticatedUserId(), role);
-        return ResponseEntity.noContent().build();
-    }
+    public ResponseEntity<Void> cancel(@PathVariable UUID id, Authentication authentication) {
+        String role = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("");
 
-    private AppointmentResponse convertToResponse(Appointment app) {
-        return AppointmentResponse.builder()
-                .id(app.getId())
-                .patientId(app.getPatientId())
-                .doctorId(app.getDoctorId())
-                .appointmentTime(app.getAppointmentTime())
-                .status(app.getStatus())
-                .build();
+        service.cancelAppointment(id, (UUID) authentication.getPrincipal(), role);
+        return ResponseEntity.noContent().build();
     }
 }
