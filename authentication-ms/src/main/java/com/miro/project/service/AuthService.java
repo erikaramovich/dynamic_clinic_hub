@@ -70,10 +70,7 @@ public class AuthService {
         // 1. Find user by name
         // Find the exact account matching both NAME and ROLE
         try {
-            String errorMessage = "Invalid name, role, or password.-> " +
-                    "name: " + request.getName() + ", " +
-                    "role: " + request.getRole() + ", " +
-                    "password: " + request.getPassword() + " !.";
+            String errorMessage = "Invalid name, role, or password.";
 
             User user = userRepository.findByNameAndRole(request.getName(), request.getRole())
                     .orElseThrow(() -> new InvalidCredentialsException(errorMessage));
