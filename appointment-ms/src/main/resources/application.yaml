@@ -10,6 +10,7 @@ spring:
     cache-names:
       - doctors
       - slots
+      - users
     caffeine:
       spec:
         - expireAfterWrite=10m

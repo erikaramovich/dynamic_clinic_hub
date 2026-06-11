@@ -40,4 +40,16 @@ public class DoctorServiceClient {
                 })
                 .body(UserInternalResponse.class);
     }
+
+    @Cacheable(value = "users", key = "#id")
+    @CircuitBreaker(name = "authService")
+    public UserInternalResponse getUserById(java.util.UUID id) {
+        return authWebClient.get()
+                .uri("/api/internal/users/{id}", id)
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                    throw new RuntimeException("User not found with ID: " + id);
+                })
+                .body(UserInternalResponse.class);
+    }
 }
