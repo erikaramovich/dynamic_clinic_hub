@@ -59,14 +59,30 @@ public class AppointmentController {
 
     @GetMapping("/my")
     @PreAuthorize("hasRole('PATIENT')")
-    public Page<AppointmentResponse> getMy(Pageable pageable) {
-        return service.getPatientAppointments(getAuthenticatedUserId(), pageable).map(mapper::toResponse);
+    public Page<AppointmentResponse> getMy(@RequestParam(required = false) Instant start,
+                                           @RequestParam(required = false) Instant end,
+                                           Pageable pageable) {
+        Page<Appointment> result;
+        if (start != null && end != null) {
+            result = service.getPatientAppointmentsFiltered(getAuthenticatedUserId(), start, end, pageable);
+        } else {
+            result = service.getPatientAppointments(getAuthenticatedUserId(), pageable);
+        }
+        return result.map(mapper::toResponse);
     }
 
     @GetMapping("/doctor/my")
     @PreAuthorize("hasRole('DOCTOR')")
-    public Page<AppointmentResponse> getDoctorMy(Pageable pageable) {
-        return service.getDoctorAppointments(getAuthenticatedUserId(), pageable).map(mapper::toResponse);
+    public Page<AppointmentResponse> getDoctorMy(@RequestParam(required = false) Instant start,
+                                                 @RequestParam(required = false) Instant end,
+                                                 Pageable pageable) {
+        Page<Appointment> result;
+        if (start != null && end != null) {
+            result = service.getDoctorAppointmentsFiltered(getAuthenticatedUserId(), start, end, pageable);
+        } else {
+            result = service.getDoctorAppointments(getAuthenticatedUserId(), pageable);
+        }
+        return result.map(mapper::toResponse);
     }
 
     @PatchMapping("/{id}/assign")
@@ -83,11 +99,34 @@ public class AppointmentController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}/reschedule")
+    @PreAuthorize("hasRole('PATIENT')")
+    public ResponseEntity<Void> reschedule(@PathVariable UUID id, @RequestParam Instant newTime) {
+        service.rescheduleAppointment(id, newTime, getAuthenticatedUserId());
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/all")
     @PreAuthorize("hasRole('ADMINISTRATOR')")
-    public Page<AppointmentResponse> getAll(@RequestParam(required = false) AppointmentStatus status, Pageable pageable) {
-        Page<Appointment> result = (status != null) ? service.getAppointmentsByStatus(status, pageable) : service.getAll(pageable);
+    public Page<AppointmentResponse> getAll(@RequestParam(required = false) AppointmentStatus status,
+                                            @RequestParam(required = false) Instant start,
+                                            @RequestParam(required = false) Instant end,
+                                            Pageable pageable) {
+        Page<Appointment> result;
+        if (status != null) {
+            result = service.getAppointmentsByStatus(status, pageable);
+        } else if (start != null && end != null) {
+            result = service.getAllFiltered(start, end, pageable);
+        } else {
+            result = service.getAll(pageable);
+        }
         return result.map(mapper::toResponse);
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('PATIENT', 'ADMINISTRATOR', 'DOCTOR')")
+    public ResponseEntity<AppointmentResponse> getById(@PathVariable UUID id) {
+        return ResponseEntity.ok(mapper.toResponse(service.getById(id)));
     }
 
     @DeleteMapping("/{id}")

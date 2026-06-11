@@ -45,6 +45,9 @@ public class AppointmentService {
         AppointmentStatus status = AppointmentStatus.REQUESTED;
         String doctorName = request.getDoctorName();
         UUID doctorId = null;
+        String resolvedDoctorName = null;
+
+        UserInternalResponse patient = doctorServiceClient.getUserById(patientId);
 
         if (doctorName != null && !doctorName.isBlank()) {
             UserInternalResponse doctor = doctorServiceClient.resolveDoctorByName(doctorName);
@@ -53,12 +56,15 @@ public class AppointmentService {
                 throw new SlotUnavailableException("Doctor " + doctorName + " is busy at this time.");
             }
             doctorId = doctor.getId();
+            resolvedDoctorName = doctor.getName();
             status = AppointmentStatus.BOOKED;
         }
 
         Appointment appointment = Appointment.builder()
                 .patientId(patientId)
+                .patientName(patient.getName())
                 .doctorId(doctorId)
+                .doctorName(resolvedDoctorName)
                 .appointmentTime(request.getTime())
                 .status(status)
                 .build();
@@ -78,6 +84,7 @@ public class AppointmentService {
         UserInternalResponse doctor = doctorServiceClient.resolveDoctorByName(doctorName);
 
         app.setDoctorId(doctor.getId());
+        app.setDoctorName(doctor.getName());
         app.setStatus(AppointmentStatus.ASSIGNED);
         repository.save(app);
         publishEvent(app);
@@ -105,6 +112,28 @@ public class AppointmentService {
         publishEvent(app);
     }
 
+    @Transactional
+    public void rescheduleAppointment(UUID id, Instant newTime, UUID requesterId) {
+        Appointment app = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+
+        if (!app.getPatientId().equals(requesterId)) {
+            throw new RuntimeException("Forbidden: Not your appointment");
+        }
+
+        if (app.getDoctorId() != null) {
+            UserInternalResponse doctor = doctorServiceClient.getUserById(app.getDoctorId());
+            if (!calendarService.isSlotAvailable(doctor.getEmail(), newTime)) {
+                throw new SlotUnavailableException("Doctor is busy at the new requested time.");
+            }
+        }
+
+        app.setAppointmentTime(newTime);
+        app.setStatus(AppointmentStatus.BOOKED);
+        repository.save(app);
+        publishEvent(app);
+    }
+
     private void incrementCreatedCounter(AppointmentStatus status) {
         Counter.builder("appointment_created_total")
                 .description("Total number of appointments created")
@@ -117,7 +146,9 @@ public class AppointmentService {
         AppointmentEvent event = AppointmentEvent.builder()
                 .appointmentId(app.getId())
                 .patientId(app.getPatientId())
+                .patientName(app.getPatientName())
                 .doctorId(app.getDoctorId())
+                .doctorName(app.getDoctorName())
                 .appointmentTime(app.getAppointmentTime())
                 .status(app.getStatus())
                 .eventTimestamp(Instant.now())
@@ -130,8 +161,16 @@ public class AppointmentService {
         return repository.findAllByPatientId(id, pageable);
     }
 
+    public Page<Appointment> getPatientAppointmentsFiltered(UUID id, Instant start, Instant end, Pageable pageable) {
+        return repository.findAllByPatientIdAndAppointmentTimeBetween(id, start, end, pageable);
+    }
+
     public Page<Appointment> getDoctorAppointments(UUID id, Pageable pageable) {
         return repository.findAllByDoctorId(id, pageable);
+    }
+
+    public Page<Appointment> getDoctorAppointmentsFiltered(UUID id, Instant start, Instant end, Pageable pageable) {
+        return repository.findAllByDoctorIdAndAppointmentTimeBetween(id, start, end, pageable);
     }
 
     public Page<Appointment> getAppointmentsByStatus(AppointmentStatus status, Pageable pageable) {
@@ -142,4 +181,12 @@ public class AppointmentService {
         return repository.findAll(pageable);
     }
 
+    public Page<Appointment> getAllFiltered(Instant start, Instant end, Pageable pageable) {
+        return repository.findAllByAppointmentTimeBetween(start, end, pageable);
+    }
+
+    public Appointment getById(UUID id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found with ID: " + id));
+    }
 }
