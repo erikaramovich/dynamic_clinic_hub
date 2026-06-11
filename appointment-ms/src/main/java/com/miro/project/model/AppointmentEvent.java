@@ -16,7 +16,9 @@ import java.util.UUID;
 public class AppointmentEvent {
     private UUID appointmentId;
     private UUID patientId;
+    private String patientName;
     private UUID doctorId;
+    private String doctorName;
     private Instant appointmentTime;
     private AppointmentStatus status;
     private Instant eventTimestamp;

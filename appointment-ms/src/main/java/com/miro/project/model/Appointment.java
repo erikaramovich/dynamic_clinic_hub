@@ -25,8 +25,14 @@ public class Appointment {
     @Column(name = "patient_id", nullable = false)
     private UUID patientId;
 
+    @Column(name = "patient_name")
+    private String patientName;
+
     @Column(name = "doctor_id")
     private UUID doctorId;
+
+    @Column(name = "doctor_name")
+    private String doctorName;
 
     @Column(name = "appointment_time", nullable = false)
     private Instant appointmentTime;
