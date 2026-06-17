@@ -1,0 +1,111 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]  # added: reopened
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # added: prevent runaway jobs
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # fix: was 1 (shallow clone), which breaks git diff across branches
+
+      - name: Run Junie Code Review
+        id: junie
+        uses: JetBrains/junie-github-action@v1
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          use_single_comment: "true"
+          prompt: |
+            Your task is to:
+            1. Get the Pull Request diff using `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`
+            2. Review this diff according to the criteria below
+            3. Output summary following the template below using `submit` action
+
+            ## Review Criteria
+
+            **Security:**
+            - SQL injection, XSS, exposed secrets
+            - Authentication/authorization issues
+            - Input validation vulnerabilities
+
+            **Performance:**
+            - N+1 queries, memory leaks
+            - Inefficient algorithms (nested loops, etc.)
+            - Blocking operations
+
+            **Code Quality:**
+            - Complexity, duplication, naming
+            - Missing tests for new logic
+            - Undocumented complex logic
+
+            ## Summary template
+
+            ## 🎯 Summary
+            [5-6 sentences overall assessment]
+
+            ## ⚠️ Issues Found
+            [Each issue: File:line, Severity (Critical/High/Medium/Low), Description, Suggested fix with code example]
+
+            ## ✨ Highlights
+            [3-4 things done well]
+
+            ## 📋 Checklist
+            - [ ] Security: No vulnerabilities
+            - [ ] Tests: Adequate coverage
+            - [ ] Performance: No bottlenecks
+            - [ ] Documentation: Complex logic explained
+
+            ## Additional instructions
+            - Strictly follow the plan above (`Your task is to:` section)
+            - You are not expected to explore the repo. Do review solely based on the downloaded diff
+            - You are not expected to run any code or any commands except `git diff`
+
+      # ─── Save the review as a per-PR markdown file ───────────────────────────
+      #
+      # How it works:
+      #   • The step below writes the Junie output (exposed via $JUNIE_OUTPUT env var
+      #     or the action's output — adjust the source to match the action's actual
+      #     output key, e.g. steps.junie.outputs.review) into a .md file named
+      #     after the PR number.
+      #   • actions/upload-artifact then attaches the file to the workflow run so
+      #     you can download it from the Actions UI (Actions → run → Artifacts).
+      #
+      # If you need the file committed to the repo instead, replace the upload step
+      # with a `git commit && git push` block (requires `contents: write` permission).
+      # ─────────────────────────────────────────────────────────────────────────
+
+      - name: Save review to markdown file
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Replace `steps.junie.outputs.review` with the actual output key name
+          # from the JetBrains action if it differs.
+          REVIEW_CONTENT: ${{ steps.junie.outputs.review }}
+        run: |
+          FILENAME="code-review-${PR_NUMBER}.md"
+          echo "# Code Review — PR #${PR_NUMBER}" > "$FILENAME"
+          echo "" >> "$FILENAME"
+          echo "**Repository:** ${{ github.repository }}" >> "$FILENAME"
+          echo "**PR title:** ${{ github.event.pull_request.title }}" >> "$FILENAME"
+          echo "**Author:** ${{ github.event.pull_request.user.login }}" >> "$FILENAME"
+          echo "**Base branch:** ${{ github.event.pull_request.base.ref }}" >> "$FILENAME"
+          echo "**Run date:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$FILENAME"
+          echo "" >> "$FILENAME"
+          echo "---" >> "$FILENAME"
+          echo "" >> "$FILENAME"
+          echo "${REVIEW_CONTENT}" >> "$FILENAME"
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-${{ github.event.pull_request.number }}
+          path: code-review-${{ github.event.pull_request.number }}.md
+          retention-days: 90  # adjust as needed; max is 400 days on paid plans
