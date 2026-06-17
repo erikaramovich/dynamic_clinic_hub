@@ -14,6 +14,9 @@ RUN mvn clean package -DskipTests -Pstand
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
+# Install curl for healthchecks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Copy the built jar file from the build stage
 COPY --from=build /app/target/*.jar app.jar
 
