@@ -1,0 +1,80 @@
+kind: Application
+
+spring:
+  application:
+    name: appointment-ms
+  profiles:
+    active: dev  # Default to dev profile when running locally
+  cache:
+    type: caffeine
+    cache-names:
+      - doctors
+      - slots
+      - users
+    caffeine:
+      spec:
+        - expireAfterWrite=10m
+        - maximumSize=100
+        - recordStats
+
+server:
+  port: 8081
+
+app:
+  services:
+    auth-url: ${AUTH_MS_URL:http://localhost:8080}
+  business:
+    hours:
+      start-utc: 9
+      end-utc: 17
+    slot-duration-minutes: 30
+  google:
+    calendar:
+      credentials-path: ${GOOGLE_CREDENTIALS_PATH:classpath:/google-credentials.json}
+      application-name: ${spring.application.name}
+
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      authService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+      googleCalendar:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+
+
+
+kafka:
+  producer:
+    acks: all
+    enable-idempotence: true
+    transaction-id-prefix: appointment-tx- # Mandatory for EXACTLY_ONCE
+  consumer:
+    isolation-level: read_committed # Only process committed messages
+
+management:
+  auditevents:
+    enabled: false
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name} # Tags all metrics with the app name

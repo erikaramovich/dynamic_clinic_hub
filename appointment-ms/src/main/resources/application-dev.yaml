@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/miro_appointment_db}
+    username: ${DB_USERNAME:macbook}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER:localhost:9092}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET} # Shared with auth-ms

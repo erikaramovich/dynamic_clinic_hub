@@ -6,9 +6,13 @@ scrape_configs:
   - job_name: 'authentication-ms'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      # If running Prometheus in Docker locally, use host.docker.internal to reach the host machine.
-      # If running natively, use localhost:8080.
-      - targets: ['host.docker.internal:8080']
+      - targets: ['authentication-ms:8080']
         labels:
           application: 'authentication-ms'
-          environment: $SPRING_PROFILE
+
+  - job_name: 'appointment-ms'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['appointment-ms:8081']
+        labels:
+          application: 'appointment-ms'

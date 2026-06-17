@@ -23,7 +23,8 @@ public class RegisterRequest {
             regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?+&])[A-Za-z\\d@$!%*?+&]{8,}$",
             message = "Password must contain at least one uppercase, one lowercase, one number, and one special character (@$!%*?+&)"
     )
-    private final String password;
+    @lombok.ToString.Exclude
+    private String password;
 
 
     @Schema(description = "Your Role in clinic hub", example = "PATIENT")

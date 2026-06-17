@@ -15,6 +15,7 @@ public class LoginRequest {
 
     @Schema(description = "Your password", example = "jacksonLS63!+")
     @NotBlank(message = "Password is required")
+    @lombok.ToString.Exclude
     private String password;
 
     @Schema(description = "The role you are logging in as", example = "PATIENT")
