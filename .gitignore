@@ -1,1 +1,8 @@
 /.env
+
+### IntelliJ IDEA ###
+.idea
+.junie
+*.iws
+*.iml
+*.ipr
